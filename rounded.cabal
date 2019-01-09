@@ -44,13 +44,13 @@ library
     Numeric.Rounded
     Numeric.Rounded.Interval
     Numeric.Rounded.Simple
+    Numeric.Rounded.Internal
     Numeric.MPFR.Types
     Numeric.MPFR.Raw
     Numeric.MPFR.Raw.Safe
     Numeric.MPFR.Raw.Unsafe
 
   other-modules:
-    Numeric.Rounded.Internal
     Numeric.Rounded.Rounding
     Numeric.Rounded.Precision
 
