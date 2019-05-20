@@ -21,6 +21,7 @@
 ----------------------------------------------------------------------------
 module Numeric.Rounded.Internal where
 
+import Control.DeepSeq (NFData(..))
 import Control.Exception (bracket, bracket_, throwIO, ArithException(Overflow))
 import Data.Bits (shiftL, testBit)
 import Data.Coerce (coerce)
@@ -481,6 +482,8 @@ kEuler = constant mpfr_const_euler
 kCatalan :: (Rounding r, Precision p) => Rounded r p
 kCatalan = constant mpfr_const_catalan
 
+instance (Precision p, Rounding r) => NFData (Rounded r p) where
+  rnf Rounded{} = ()
 
 in_' :: Rounded r p -> (MPFR -> IO a) -> IO a
 in_' (Rounded p s e l) f = withByteArray l $ \ptr _bytes -> f MPFR
