@@ -60,7 +60,8 @@ library
     reflection       >= 2.1.2   && < 2.2,
     singletons       >= 2.1     && < 2.6,
     hgmp             >= 0.1.1   && < 0.2,
-    long-double      >= 0.1     && < 0.2
+    long-double      >= 0.1     && < 0.2,
+    deepseq          >= 1.1     && < 1.5,
 
   ghc-options:     -Wall -fspec-constr -funbox-strict-fields -fno-warn-unticked-promoted-constructors
   build-tools:     hsc2hs
