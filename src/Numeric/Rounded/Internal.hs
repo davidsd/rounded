@@ -21,6 +21,10 @@
 ----------------------------------------------------------------------------
 module Numeric.Rounded.Internal where
 
+import qualified Data.Binary as Bin
+import Data.Scientific (toRealFloat, fromFloatDigits)
+import Data.Aeson (ToJSON(..), FromJSON(..))
+import Data.Binary (get,put)
 import Control.DeepSeq (NFData(..))
 import Control.Exception (bracket, bracket_, throwIO, ArithException(Overflow))
 import Data.Bits (shiftL, testBit)
@@ -467,6 +471,22 @@ instance (Rounding r, Precision p) => RealFloat (Rounded r p) where
   isIEEE _ = True -- is this a lie? it mostly behaves like an IEEE float, despite being much bigger
   atan2 = atan2_
 
+instance (Precision p, Rounding r) => Bin.Binary (Rounded r p) where
+  put = put . decodeFloat
+  get = fmap (uncurry encodeFloat) get
+
+-- NOTE: These To/FromJSON instances do not provide perfect
+-- round-tripping. The reason is that aeson uses Scientific which is
+-- base-10, whereas MPFR uses base 2.
+instance (Precision p, Rounding r) => ToJSON (Rounded r p) where
+  toJSON = toJSON . fromFloatDigits
+
+instance (Precision p, Rounding r) => FromJSON (Rounded r p) where
+  parseJSON = fmap toRealFloat . parseJSON
+
+instance (Precision p, Rounding r) => NFData (Rounded r p) where
+  rnf Rounded{} = ()
+
 kPi :: (Rounding r, Precision p) => Rounded r p
 kPi = constant mpfr_const_pi
 
@@ -481,9 +501,6 @@ kEuler = constant mpfr_const_euler
 -- | 0.915...
 kCatalan :: (Rounding r, Precision p) => Rounded r p
 kCatalan = constant mpfr_const_catalan
-
-instance (Precision p, Rounding r) => NFData (Rounded r p) where
-  rnf Rounded{} = ()
 
 in_' :: Rounded r p -> (MPFR -> IO a) -> IO a
 in_' (Rounded p s e l) f = withByteArray l $ \ptr _bytes -> f MPFR
