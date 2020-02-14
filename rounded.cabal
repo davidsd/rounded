@@ -64,7 +64,8 @@ library
     deepseq          >= 1.1     && < 1.5,
     binary           < 1.0,
     scientific       < 0.4,
-    aeson            < 2.0
+    aeson            < 2.0,
+    hashable         < 1.4
 
   ghc-options:     -Wall -fspec-constr -funbox-strict-fields -fno-warn-unticked-promoted-constructors
   build-tools:     hsc2hs

@@ -32,6 +32,7 @@ import Data.Coerce (coerce)
 import Data.Int (Int32)
 import Data.Proxy (Proxy(..))
 import Data.Ratio ((%))
+import Data.Hashable (Hashable(..), hashUsing)
 
 import Foreign (with, alloca, allocaBytes, peek, sizeOf, nullPtr)
 import Foreign.C (CInt(..), CIntMax(..))
@@ -486,6 +487,9 @@ instance (Precision p, Rounding r) => FromJSON (Rounded r p) where
 
 instance (Precision p, Rounding r) => NFData (Rounded r p) where
   rnf Rounded{} = ()
+
+instance (Precision p, Rounding r) => Hashable (Rounded r p) where
+  hashWithSalt = hashUsing decodeFloat
 
 kPi :: (Rounding r, Precision p) => Rounded r p
 kPi = constant mpfr_const_pi
