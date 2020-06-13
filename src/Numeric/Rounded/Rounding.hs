@@ -72,7 +72,8 @@ instance Bounded RoundingMode where
   minBound = TowardNearestWithTiesAwayFromZero
   maxBound = Faithfully
 
-newtype instance Sing (m :: RoundingMode) = SRounding RoundingMode
+newtype SRounding (m :: RoundingMode) = SRounding RoundingMode
+type instance Sing = SRounding
 
 instance SingI TowardNearestWithTiesAwayFromZero where sing = SRounding TowardNearestWithTiesAwayFromZero
 instance SingI TowardNearest where sing = SRounding TowardNearest
