@@ -13,7 +13,7 @@ import GHC.Generics
 import Prelude hiding (elem, notElem)
 
 data Interval p
-  = I (Rounded TowardNegInf p) (Rounded TowardInf p)
+  = I (Rounded 'TowardNegInf p) (Rounded 'TowardInf p)
   | Empty
   deriving (Typeable, Generic)
 
@@ -57,7 +57,7 @@ decreasing f (I a b) = I (coerce (f b)) (coerce (f a))
 decreasing _ Empty = Empty
 --
 
-(...) :: Rounded TowardNegInf p -> Rounded TowardInf p -> Interval p
+(...) :: Rounded 'TowardNegInf p -> Rounded 'TowardInf p -> Interval p
 a ... b
   | coerce a <= b = I a b
   | otherwise = Empty
@@ -76,7 +76,7 @@ posInfinity = 1/0
 {-# INLINE posInfinity #-}
 
 -- | create a non-empty interval or fail
-interval :: Rounded TowardNegInf p -> Rounded TowardInf p -> Maybe (Interval p)
+interval :: Rounded 'TowardNegInf p -> Rounded 'TowardInf p -> Maybe (Interval p)
 interval a b
   | coerce a <= b = Just $ I a b
   | otherwise     = Nothing
@@ -120,7 +120,7 @@ null _ = False
 --
 -- >>> inf empty
 -- *** Exception: empty interval
-inf :: Interval p -> Rounded TowardNegInf p
+inf :: Interval p -> Rounded 'TowardNegInf p
 inf (I a _) = a
 inf Empty = error "empty interval"
 {-# INLINE inf #-}
@@ -132,7 +132,7 @@ inf Empty = error "empty interval"
 --
 -- >>> sup empty
 -- *** Exception: empty interval
-sup :: Interval p -> Rounded TowardInf p
+sup :: Interval p -> Rounded 'TowardInf p
 sup (I _ b) = b
 sup Empty = error "empty interval"
 {-# INLINE sup #-}
@@ -202,7 +202,7 @@ instance Precision p => Show (Interval p) where
 --
 -- >>> width empty
 -- 0 ... 0
-width :: Precision p => Interval p -> Rounded TowardInf p
+width :: Precision p => Interval p -> Rounded 'TowardInf p
 width (I a b) = b - coerce a
 width Empty   = 0
 {-# INLINE width #-}
@@ -222,7 +222,7 @@ width Empty   = 0
 --
 -- >>> magnitude empty
 -- *** Exception: empty interval
-magnitude :: Precision p => Interval p -> Rounded TowardInf p
+magnitude :: Precision p => Interval p -> Rounded 'TowardInf p
 magnitude = sup . abs
 {-# INLINE magnitude #-}
 
@@ -241,7 +241,7 @@ magnitude = sup . abs
 --
 -- >>> mignitude empty
 -- *** Exception: empty interval
-mignitude :: Precision p => Interval p -> Rounded TowardNegInf p -- TowardZero?
+mignitude :: Precision p => Interval p -> Rounded 'TowardNegInf p -- 'TowardZero?
 mignitude = inf . abs
 {-# INLINE mignitude #-}
 
@@ -249,7 +249,7 @@ mignitude = inf . abs
 --
 -- >>> symmetric 3
 -- -3 ... 3
-symmetric :: Rounded TowardInf p -> Interval p
+symmetric :: Rounded 'TowardInf p -> Interval p
 symmetric b = coerce (negate' b) ... b
 
 -- | Hausdorff distance between intervals.
@@ -265,7 +265,7 @@ symmetric b = coerce (negate' b) ... b
 --
 -- >>> distance Empty (1 ... 1)
 -- *** Exception: empty interval
-distance :: Precision p => Interval p -> Interval p -> Rounded TowardNegInf p -- TowardZero?
+distance :: Precision p => Interval p -> Interval p -> Rounded 'TowardNegInf p -- 'TowardZero?
 distance i1 i2 = mignitude (i1 - i2)
 
 -- | Inflate an interval by enlarging it at both ends.
@@ -278,7 +278,7 @@ distance i1 i2 = mignitude (i1 - i2)
 --
 -- >>> inflate 1 empty
 -- Empty
-inflate :: Precision p => Rounded TowardInf p -> Interval p -> Interval p
+inflate :: Precision p => Rounded 'TowardInf p -> Interval p -> Interval p
 inflate x y = symmetric x + y
 
 {-
@@ -313,7 +313,7 @@ deflate x (I a b) | a' <= b'  = I a' b'
 --
 -- >>> (20 ... 30 :: Interval Double) <! (5 ... 10 :: Interval Double)
 -- False
-(<!)  :: Precision p => Interval p -> Interval p -> Bool
+(<!)  :: Interval p -> Interval p -> Bool
 I _ bx <! I ay _ = coerce bx < ay
 _ <! _ = True
 {-# INLINE (<!) #-}
@@ -328,7 +328,7 @@ _ <! _ = True
 --
 -- >>> (20 ... 30 :: Interval Double) <=! (5 ... 10 :: Interval Double)
 -- False
-(<=!) :: Precision p => Interval p -> Interval p -> Bool
+(<=!) :: Interval p -> Interval p -> Bool
 I _ bx <=! I ay _ = coerce bx <= ay
 _ <=! _ = True
 {-# INLINE (<=!) #-}
@@ -366,7 +366,7 @@ _ /=! _ = True
 --
 -- >>> (5 ... 20 :: Interval Double) >! (15 ... 40 :: Interval Double)
 -- False
-(>!) :: Precision p => Interval p -> Interval p -> Bool
+(>!) :: Interval p -> Interval p -> Bool
 I ax _ >! I _ by = ax > coerce by
 _ >! _ = True
 {-# INLINE (>!) #-}
@@ -378,7 +378,7 @@ _ >! _ = True
 --
 -- >>> (5 ... 20 :: Interval Double) >=! (15 ... 40 :: Interval Double)
 -- False
-(>=!) :: Precision p => Interval p -> Interval p -> Bool
+(>=!) :: Interval p -> Interval p -> Bool
 I ax _ >=! I _ by = coerce ax >= by
 _ >=! _ = True
 
@@ -399,7 +399,7 @@ _ >=! _ = True
 -- >>> elem 5 empty
 -- False
 --
-elem :: Rounded TowardZero p -> Interval p -> Bool
+elem :: Rounded 'TowardZero p -> Interval p -> Bool
 elem x (I a b) = coerce x >= a && coerce x <= b
 elem _ Empty = False
 {-# INLINE elem #-}
@@ -416,13 +416,13 @@ elem _ Empty = False
 --
 -- >>> notElem 5 empty
 -- True
-notElem :: Rounded TowardZero p -> Interval p -> Bool
+notElem :: Rounded 'TowardZero p -> Interval p -> Bool
 notElem x xs = not (elem x xs)
 {-# INLINE notElem #-}
 
 
 -- | For all @x@ in @X@, @y@ in @Y@. @x `op` y@
-certainly :: Precision p => (forall b. Ord b => b -> b -> Bool) -> Interval p -> Interval p -> Bool
+certainly :: (forall b. Ord b => b -> b -> Bool) -> Interval p -> Interval p -> Bool
 certainly cmp l r
     | lt && eq && gt = True
     | lt && eq       = l <=! r
@@ -439,14 +439,14 @@ certainly cmp l r
 {-# INLINE certainly #-}
 
 -- | Does there exist an @x@ in @X@, @y@ in @Y@ such that @x '<' y@?
-(<?) :: Precision p => Interval p -> Interval p -> Bool
+(<?) :: Interval p -> Interval p -> Bool
 Empty <? _ = False
 _ <? Empty = False
 I ax _ <? I _ by = coerce ax < by
 {-# INLINE (<?) #-}
 
 -- | Does there exist an @x@ in @X@, @y@ in @Y@ such that @x '<=' y@?
-(<=?) :: Precision p => Interval p -> Interval p -> Bool
+(<=?) :: Interval p -> Interval p -> Bool
 Empty <=? _ = False
 _ <=? Empty = False
 I ax _ <=? I _ by = coerce ax <= by
@@ -465,19 +465,19 @@ _ /=? _ = False
 {-# INLINE (/=?) #-}
 
 -- | Does there exist an @x@ in @X@, @y@ in @Y@ such that @x '>' y@?
-(>?) :: Precision p => Interval p -> Interval p -> Bool
+(>?) :: Interval p -> Interval p -> Bool
 I _ bx >? I ay _ = bx > coerce ay
 _ >? _ = False
 {-# INLINE (>?) #-}
 
 -- | Does there exist an @x@ in @X@, @y@ in @Y@ such that @x '>=' y@?
-(>=?) :: Precision p => Interval p -> Interval p -> Bool
+(>=?) :: Interval p -> Interval p -> Bool
 I _ bx >=? I ay _ = bx >= coerce ay
 _ >=? _ = False
 {-# INLINE (>=?) #-}
 
 -- | Does there exist an @x@ in @X@, @y@ in @Y@ such that @x `op` y@?
-possibly :: Precision p => (forall b. Ord b => b -> b -> Bool) -> Interval p -> Interval p -> Bool
+possibly :: (forall b. Ord b => b -> b -> Bool) -> Interval p -> Interval p -> Bool
 possibly cmp l r
     | lt && eq && gt = True
     | lt && eq       = l <=? r
@@ -500,7 +500,7 @@ possibly cmp l r
 --
 -- >>> (20 ... 40 :: Interval Double) `contains` (15 ... 35 :: Interval Double)
 -- False
-contains :: Precision p => Interval p -> Interval p -> Bool
+contains :: Interval p -> Interval p -> Bool
 contains _ Empty = True
 contains (I ax bx) (I ay by) = ax <= ay && by <= bx
 contains Empty I{} = False
@@ -513,7 +513,7 @@ contains Empty I{} = False
 --
 -- >>> (20 ... 40 :: Interval Double) `isSubsetOf` (15 ... 35 :: Interval Double)
 -- False
-isSubsetOf :: Precision p => Interval p -> Interval p -> Bool
+isSubsetOf :: Interval p -> Interval p -> Bool
 isSubsetOf = flip contains
 {-# INLINE isSubsetOf #-}
 
@@ -521,7 +521,7 @@ isSubsetOf = flip contains
 --
 -- >>> intersection (1 ... 10 :: Interval Double) (5 ... 15 :: Interval Double)
 -- 5.0 ... 10.0
-intersection :: Precision p => Interval p -> Interval p -> Interval p
+intersection :: Interval p -> Interval p -> Interval p
 intersection x@(I a b) y@(I a' b')
   | x /=! y   = Empty
   | otherwise = I (max a a') (min b b')
@@ -535,7 +535,7 @@ intersection _ _ = Empty
 --
 -- >>> hull (15 ... 85 :: Interval Double) (0 ... 10 :: Interval Double)
 -- 0.0 ... 85.0
-hull :: Precision p => Interval p -> Interval p -> Interval p
+hull :: Interval p -> Interval p -> Interval p
 hull (I a b) (I a' b') = I (min a a') (max b b')
 hull Empty x = x
 hull x Empty = x
@@ -565,7 +565,7 @@ divNonZero (I a b) (I a' b') =
 divNonZero _ _ = Empty
 
 -- @'divPositive' X y@ assumes y > 0, and divides @X@ by [0 ... y]
-divPositive :: Precision p => Interval p -> Rounded TowardInf p -> Interval p
+divPositive :: Precision p => Interval p -> Rounded 'TowardInf p -> Interval p
 divPositive Empty _ = Empty
 divPositive x@(I a b) y
   | a == 0 && b == 0 = x
@@ -575,7 +575,7 @@ divPositive x@(I a b) y
 {-# INLINE divPositive #-}
 
 -- divNegative assumes y < 0 and divides the interval @X@ by [y ... 0]
-divNegative :: Precision p => Interval p -> Rounded TowardNegInf p -> Interval p
+divNegative :: Precision p => Interval p -> Rounded 'TowardNegInf p -> Interval p
 divNegative Empty _ = Empty
 divNegative x@(I a b) y
   | a == 0 && b == 0 = negate x -- flip negative zeros
@@ -609,7 +609,7 @@ instance Precision p => Fractional (Interval p) where
   fromRational = I <$> fromRational <*> fromRational
   {-# INLINE fromRational #-}
 
-midpoint :: Precision p => Interval p -> Rounded TowardNegInf p
+midpoint :: Precision p => Interval p -> Rounded 'TowardNegInf p
 midpoint (I a b) = a + (coerce b - a) / 2
 midpoint _ = 0/0 -- TODO: use mpfr's nan
 

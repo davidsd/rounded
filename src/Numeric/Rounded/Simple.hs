@@ -107,7 +107,7 @@ module Numeric.Rounded.Simple
   ) where
 
 import Control.Exception (bracket_)
-import Foreign (Ptr(..), alloca)
+import Foreign (Ptr, alloca)
 import GHC.Prim ( ByteArray# )
 
 import Numeric.LongDouble (LongDouble)
@@ -134,7 +134,7 @@ precision = fromIntegral . roundedPrec
 reifyRounded :: Rounded -> (forall p . R.Precision p => R.Rounded r p -> a) -> a
 reifyRounded (Rounded p s e l) f = R.reifyPrecision (fromIntegral p) (\q -> f (g q (R.Rounded p s e l)))
   where
-    g :: R.Precision q => proxy q -> R.Rounded s q -> R.Rounded s q
+    g :: proxy q -> R.Rounded s q -> R.Rounded s q
     g _ x = x
 
 simplify :: R.Rounded r p -> Rounded
@@ -143,7 +143,7 @@ simplify (R.Rounded p s e l) = Rounded p s e l
 constant :: (forall r p . (R.Rounding r, R.Precision p) => R.Rounded r p) -> RoundingMode -> Precision -> Rounded
 constant f r q = R.reifyRounding r (\pr -> R.reifyPrecision q (\pq -> g pr pq f))
   where
-    g :: (R.Rounding r, R.Precision p) => proxy1 r -> proxy2 p -> R.Rounded r p -> Rounded
+    g :: proxy1 r -> proxy2 p -> R.Rounded r p -> Rounded
     g _ _ b = simplify b
 
 kPi, kLog2, kEuler, kCatalan :: RoundingMode -> Precision -> Rounded
@@ -156,7 +156,7 @@ kCatalan = constant R.kCatalan
 unary :: (forall r p q . (R.Rounding r, R.Precision p, R.Precision q) => R.Rounded r p -> R.Rounded r q) -> RoundingMode -> Precision -> Rounded -> Rounded
 unary f r q a = R.reifyRounding r (\pr -> R.reifyPrecision q (\pq -> reifyRounded a (\ra -> g pr pq f ra)))
   where
-    g :: (R.Rounding r, R.Precision p, R.Precision q) => proxy1 r -> proxy2 q -> (R.Rounded r p -> R.Rounded r q) -> R.Rounded r p -> Rounded
+    g :: proxy1 r -> proxy2 q -> (R.Rounded r p -> R.Rounded r q) -> R.Rounded r p -> Rounded
     g _ _ h b = simplify (h b)
 
 abs_, negate_, log_, exp_, sqrt_,
@@ -204,13 +204,13 @@ fromRational' = fromX fromRational
 fromX :: (forall r p . (R.Rounding r, R.Precision p) => x -> R.Rounded r p) -> RoundingMode -> Precision -> x -> Rounded
 fromX f r p x = R.reifyRounding r (\pr -> R.reifyPrecision p (\pp -> g pr pp (f x)))
   where
-    g :: (R.Rounding r, R.Precision p) => proxy1 r -> proxy2 p -> R.Rounded r p -> Rounded
-    g _ _ x = simplify x
+    g :: proxy1 r -> proxy2 p -> R.Rounded r p -> Rounded
+    g _ _ x' = simplify x'
 
 binary :: (forall r p q pq . (R.Rounding r, R.Precision p, R.Precision q, R.Precision pq) => R.Rounded r p -> R.Rounded r q -> R.Rounded r pq) -> RoundingMode -> Precision -> Rounded -> Rounded -> Rounded
 binary f r pq a b = R.reifyRounding r (\pr -> R.reifyPrecision pq (\ppq -> reifyRounded a (\ra -> reifyRounded b (\rb -> g pr ppq f ra rb))))
   where
-    g :: (R.Rounding r, R.Precision p, R.Precision q, R.Precision pq) => proxy1 r -> proxy2 pq -> (R.Rounded r p -> R.Rounded r q -> R.Rounded r pq) -> R.Rounded r p -> R.Rounded r q -> Rounded
+    g :: proxy1 r -> proxy2 pq -> (R.Rounded r p -> R.Rounded r q -> R.Rounded r pq) -> R.Rounded r p -> R.Rounded r q -> Rounded
     g _ _ h x y = simplify (h x y)
 
 binary' :: (forall r p q pq . (R.Rounding r, R.Precision p, R.Precision q, R.Precision pq) => R.Rounded r p -> R.Rounded r q -> R.Rounded r pq) -> Rounded -> Rounded -> Rounded
@@ -229,7 +229,7 @@ atan2_ = binary R.atan2_
 unary' :: (forall r p . (R.Rounding r, R.Precision p) => R.Rounded r p -> a) -> RoundingMode -> Rounded -> a
 unary' f r a = R.reifyRounding r (\pr -> reifyRounded a (\ra -> g pr f ra))
   where
-    g :: (R.Rounding r, R.Precision p) => proxy r -> (R.Rounded r p -> a) -> R.Rounded r p -> a
+    g :: proxy r -> (R.Rounded r p -> a) -> R.Rounded r p -> a
     g _ h x = h x
 
 unary'' :: (forall r p . (R.Rounding r, R.Precision p) => R.Rounded r p -> a) -> Rounded -> a
@@ -266,7 +266,7 @@ decodeFloat' = unary'' decodeFloat
 encodeFloat' :: RoundingMode -> Precision -> Integer -> Int -> Rounded
 encodeFloat' r p m e = R.reifyRounding r (\rp -> R.reifyPrecision p (\pp -> g rp pp (encodeFloat m e)))
   where
-    g :: R.Precision p => proxy1 r -> proxy2 p -> R.Rounded r p -> Rounded
+    g :: proxy1 r -> proxy2 p -> R.Rounded r p -> Rounded
     g _ _ x = simplify x
 
 exponent' :: Rounded -> Int
@@ -298,7 +298,7 @@ isIEEE' = unary'' isIEEE
 properFraction_ :: Integral i => Rounded -> (i, Rounded)
 properFraction_ a = reifyRounded a g
   where
-    g :: (Integral j, R.Precision p) => R.Rounded R.TowardNearest p -> (j, Rounded)
+    g :: (Integral j, R.Precision p) => R.Rounded 'R.TowardNearest p -> (j, Rounded)
     g ra = case properFraction ra of (i, b) -> (i, simplify b)
 
 truncate_, ceiling_, floor_, round_ :: Precision -> Rounded -> Rounded
@@ -309,7 +309,7 @@ floor_ = unary R.floor_ TowardNearest
 
 type Comparison = Rounded -> Rounded -> Bool
 
-cmp :: (forall p q . (R.Precision p, R.Precision q) => R.Rounded R.TowardNearest p -> R.Rounded R.TowardNearest q -> Bool) -> Comparison
+cmp :: (forall p q . (R.Precision p, R.Precision q) => R.Rounded 'R.TowardNearest p -> R.Rounded 'R.TowardNearest q -> Bool) -> Comparison
 cmp f a b = reifyRounded a (\ra -> reifyRounded b (\rb -> f ra rb))
 
 instance Eq Rounded where
@@ -335,7 +335,7 @@ show' = unary'' show
 read' :: RoundingMode -> Precision -> String -> Rounded
 read' r p s = R.reifyRounding r (\pr -> R.reifyPrecision p (\pp -> g pr pp (read s)))
   where
-    g :: (R.Rounding r, R.Precision p) => proxy1 r -> proxy2 p -> R.Rounded r p -> Rounded
+    g :: proxy1 r -> proxy2 p -> R.Rounded r p -> Rounded
     g _ _ x = simplify x
 
 -- Foreign Function Interface
@@ -380,5 +380,5 @@ withInOutRounded_ x = fmap fst . withInOutRounded x
 peekRounded :: Ptr MPFR -> IO Rounded
 peekRounded ptr = R.peekRounded ptr f
   where
-    f :: R.Precision p => R.Rounded TowardNearest p -> IO Rounded
+    f :: R.Rounded 'TowardNearest p -> IO Rounded
     f mr = return (simplify mr)

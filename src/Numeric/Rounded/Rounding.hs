@@ -42,13 +42,13 @@ data RoundingMode
   deriving (Eq,Ord,Show,Read,Data,Typeable)
 
 class Rounding (r :: RoundingMode) where rounding :: Proxy r -> RoundingMode
-instance Rounding TowardNearest where rounding _ = TowardNearest
-instance Rounding TowardZero    where rounding _ = TowardZero
-instance Rounding TowardInf     where rounding _ = TowardInf
-instance Rounding TowardNegInf  where rounding _ = TowardNegInf
-instance Rounding AwayFromZero  where rounding _ = AwayFromZero
-instance Rounding Faithfully    where rounding _ = Faithfully
-instance Rounding TowardNearestWithTiesAwayFromZero where rounding _ = TowardNearestWithTiesAwayFromZero
+instance Rounding 'TowardNearest where rounding _ = TowardNearest
+instance Rounding 'TowardZero    where rounding _ = TowardZero
+instance Rounding 'TowardInf     where rounding _ = TowardInf
+instance Rounding 'TowardNegInf  where rounding _ = TowardNegInf
+instance Rounding 'AwayFromZero  where rounding _ = AwayFromZero
+instance Rounding 'Faithfully    where rounding _ = Faithfully
+instance Rounding 'TowardNearestWithTiesAwayFromZero where rounding _ = TowardNearestWithTiesAwayFromZero
 
 instance Enum RoundingMode where
   toEnum MPFR_RNDNA = TowardNearestWithTiesAwayFromZero
@@ -75,20 +75,20 @@ instance Bounded RoundingMode where
 newtype SRounding (m :: RoundingMode) = SRounding RoundingMode
 type instance Sing = SRounding
 
-instance SingI TowardNearestWithTiesAwayFromZero where sing = SRounding TowardNearestWithTiesAwayFromZero
-instance SingI TowardNearest where sing = SRounding TowardNearest
-instance SingI TowardZero    where sing = SRounding TowardZero
-instance SingI TowardInf     where sing = SRounding TowardInf
-instance SingI TowardNegInf  where sing = SRounding TowardNegInf
-instance SingI AwayFromZero  where sing = SRounding AwayFromZero
-instance SingI Faithfully    where sing = SRounding Faithfully
+instance SingI 'TowardNearestWithTiesAwayFromZero where sing = SRounding TowardNearestWithTiesAwayFromZero
+instance SingI 'TowardNearest where sing = SRounding TowardNearest
+instance SingI 'TowardZero    where sing = SRounding TowardZero
+instance SingI 'TowardInf     where sing = SRounding TowardInf
+instance SingI 'TowardNegInf  where sing = SRounding TowardNegInf
+instance SingI 'AwayFromZero  where sing = SRounding AwayFromZero
+instance SingI 'Faithfully    where sing = SRounding Faithfully
 
 reifyRounding :: RoundingMode -> (forall s. Rounding s => Proxy s -> r) -> r
-reifyRounding TowardNearestWithTiesAwayFromZero f = f (Proxy :: Proxy TowardNearestWithTiesAwayFromZero)
-reifyRounding TowardNearest                     f = f (Proxy :: Proxy TowardNearest)
-reifyRounding TowardZero                        f = f (Proxy :: Proxy TowardZero)
-reifyRounding TowardInf                         f = f (Proxy :: Proxy TowardInf)
-reifyRounding TowardNegInf                      f = f (Proxy :: Proxy TowardNegInf)
-reifyRounding AwayFromZero                      f = f (Proxy :: Proxy AwayFromZero)
-reifyRounding Faithfully                        f = f (Proxy :: Proxy Faithfully)
+reifyRounding TowardNearestWithTiesAwayFromZero f = f (Proxy :: Proxy 'TowardNearestWithTiesAwayFromZero)
+reifyRounding TowardNearest                     f = f (Proxy :: Proxy 'TowardNearest)
+reifyRounding TowardZero                        f = f (Proxy :: Proxy 'TowardZero)
+reifyRounding TowardInf                         f = f (Proxy :: Proxy 'TowardInf)
+reifyRounding TowardNegInf                      f = f (Proxy :: Proxy 'TowardNegInf)
+reifyRounding AwayFromZero                      f = f (Proxy :: Proxy 'AwayFromZero)
+reifyRounding Faithfully                        f = f (Proxy :: Proxy 'Faithfully)
 {-# INLINE reifyRounding #-}

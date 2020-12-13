@@ -25,11 +25,11 @@ import qualified Data.Binary as Bin
 import Data.Scientific (toRealFloat, fromFloatDigits)
 import Data.Aeson (ToJSON(..), FromJSON(..))
 import Data.Binary (get,put)
+import Data.Kind (Type)
 import Control.DeepSeq (NFData(..))
 import Control.Exception (bracket, bracket_, throwIO, ArithException(Overflow))
 import Data.Bits (shiftL, testBit)
 import Data.Coerce (coerce)
-import Data.Int (Int32)
 import Data.Proxy (Proxy(..))
 import Data.Ratio ((%))
 import Data.Hashable (Hashable(..), hashUsing)
@@ -79,19 +79,19 @@ data Rounded (r :: RoundingMode) p = Rounded
   }
 
 -- | Round to 'Double' with the given rounding mode.
-toDouble :: (Rounding r, Precision p) => Rounded r p -> Double
+toDouble :: (Rounding r) => Rounded r p -> Double
 toDouble x = unsafePerformIO $ in_ x $ \xfr -> mpfr_get_d xfr (rnd x)
 -- this syntax is strange, but it seems to be the way it works...
 {-# RULES "realToFrac/toDouble" forall (x :: (Rounding r, Precision p) => Rounded r p) . realToFrac x = toDouble x #-}
 
 -- | Round to 'LongDouble' with the given rounding mode.
-toLongDouble :: (Rounding r, Precision p) => Rounded r p -> LongDouble
+toLongDouble :: (Rounding r) => Rounded r p -> LongDouble
 toLongDouble x = unsafePerformIO $ in_ x $ \xfr -> with 0 $ \yfr -> with 0 $ \ffr -> wrapped_mpfr_get_ld yfr xfr (rnd x) ffr >> peek yfr
 -- this syntax is strange, but it seems to be the way it works...
 {-# RULES "realToFrac/toLongDouble" forall (x :: (Rounding r, Precision p) => Rounded r p) . realToFrac x = toLongDouble x #-}
 
 -- | Round to a different precision with the given rounding mode.
-precRound :: (Rounding r, Precision p1, Precision p2) => Rounded r p1 -> Rounded r p2
+precRound :: (Rounding r, Precision p2) => Rounded r p1 -> Rounded r p2
 precRound x = unsafePerformIO $ do
   (Just y, _) <- in_ x $ \xfr -> out_ $ \yfr ->
     mpfr_set yfr xfr (rnd x)
@@ -118,7 +118,8 @@ toString x = unsafePerformIO $ do
                           "e" ++ show (e - 1)
       | e == 0         -> sign ++ "0." ++
                           dropTrailingZeroes digits
-      | e <  threshold -> sign ++ take e digits0 ++ "." ++
+      -- | e <  threshold
+      | otherwise      -> sign ++ take e digits0 ++ "." ++
                           dropTrailingZeroes (take (n - e) (drop e digits0))
       where
         sgn' = sgn x
@@ -145,7 +146,7 @@ instance (Rounding r, Precision p) => Read (Rounded r p) where
   readsPrec _ = readSigned readFloat -- FIXME: precedence issues?
 
 unary
-  :: (Rounding r, Precision p1, Precision p2)
+  :: (Rounding r, Precision p2)
   => Unary -> Rounded r p1 -> Rounded r p2
 unary f a = unsafePerformIO $ do
   (Just c, _) <- in_ a $ \afr ->
@@ -186,7 +187,7 @@ abs_, negate_, log_, exp_, sqrt_,
  sin_, cos_, tan_, asin_, acos_, atan_,
    sinh_, cosh_, tanh_, asinh_, acosh_, atanh_,
      log1p_, expm1_
-  :: (Rounding r, Precision p1, Precision p2)
+  :: (Rounding r, Precision p2)
   => Rounded r p1 -> Rounded r p2
 abs_ = unary mpfr_abs
 negate_ = unary mpfr_neg
@@ -209,7 +210,7 @@ log1p_ = unary mpfr_log1p
 expm1_ = unary mpfr_expm1
 
 binary
-  :: (Rounding r, Precision p1, Precision p2, Precision p3)
+  :: (Rounding r, Precision p3)
   => Binary -> Rounded r p1 -> Rounded r p2 -> Rounded r p3
 binary f a b = unsafePerformIO $ do
   (Just c, _) <- in_ a $ \afr ->
@@ -219,7 +220,7 @@ binary f a b = unsafePerformIO $ do
   return c
 
 min_, max_, (!+!), (!-!), (!*!), (!/!), atan2_
-  :: (Rounding r, Precision p1, Precision p2, Precision p3)
+  :: (Rounding r, Precision p3)
   => Rounded r p1 -> Rounded r p2 -> Rounded r p3
 min_ = binary mpfr_min
 max_ = binary mpfr_max
@@ -250,8 +251,7 @@ cmp :: Comparison -> Rounded r p1 -> Rounded r p2 -> Bool
 cmp f a b = cmp' f a b /= 0
 
 (!==!), (!/=!), (!<=!), (!>=!), (!<!), (!>!)
-  :: (Precision p1, Precision p2)
-  => Rounded r p1 -> Rounded r p2 -> Bool
+  :: Rounded r p1 -> Rounded r p2 -> Bool
 (!==!) = cmp mpfr_equal_p
 (!/=!) = cmp mpfr_lessgreater_p
 (!<=!) = cmp mpfr_lessequal_p
@@ -261,7 +261,7 @@ cmp f a b = cmp' f a b /= 0
 
 infix 4 !==!, !/=!, !<=!, !>=!, !<!, !>!
 
-compare_ :: (Precision p1, Precision p2) => Rounded r p1 -> Rounded r p2 -> Ordering
+compare_ :: Rounded r p1 -> Rounded r p2 -> Ordering
 compare_ a b = compare (cmp' mpfr_cmp a b) 0
 
 instance Eq (Rounded r p) where
@@ -277,7 +277,7 @@ instance Rounding r => Ord (Rounded r p) where
   min = binary' mpfr_min
   max = binary' mpfr_max
 
-sgn :: (Rounding r, Precision p) => Rounded r p -> Ordering
+sgn :: Rounded r p -> Ordering
 sgn x = compare (unsafePerformIO $ in_ x mpfr_sgn) 0
 
 instance (Rounding r, Precision p) => Num (Rounded r p) where
@@ -378,7 +378,7 @@ instance (Rounding r, Precision p) => Floating (Rounded r p) where
   expm1 = expm1_
 #endif
 
-toRational' :: Precision p => Rounded r p -> Rational
+toRational' :: Rounded r p -> Rational
 toRational' r
    | e > 0     = fromIntegral (s `shiftL` e)
    | otherwise = s % (1 `shiftL` negate e)
@@ -397,7 +397,7 @@ modf x = unsafePerformIO $ do
 
 -- | Round to 'Integer' using the specified rounding mode.  Throws 'Overflow' if
 --   the result cannot be represented (for example, infinities or NaN).
-toInteger' :: (Rounding r, Precision p) => Rounded r p -> Integer
+toInteger' :: (Rounding r) => Rounded r p -> Integer
 toInteger' x = unsafePerformIO $
   withOutInteger_ $ \yz ->
     in_ x $ \xfr ->
@@ -415,21 +415,21 @@ instance (Rounding r, Precision p) => RealFrac (Rounded r p) where
   ceiling  = roundFunc ceiling_
   floor    = roundFunc floor_
 
-roundFunc :: (Integral i, Precision p) => (Rounded TowardNearest p -> Rounded TowardNearest p) -> Rounded r p -> i
+roundFunc :: (Integral i) => (Rounded 'TowardNearest p -> Rounded 'TowardNearest p) -> Rounded r p -> i
 roundFunc f = fromInteger . toInteger' . f . coerce
 
-unary_ :: (Precision p1, Precision p2) => (Ptr MPFR -> Ptr MPFR -> IO CInt) -> Rounded r p1 -> Rounded r p2
+unary_ :: (Precision p2) => (Ptr MPFR -> Ptr MPFR -> IO CInt) -> Rounded r p1 -> Rounded r p2
 unary_ f x = unsafePerformIO $ do
   Just y <- withInRounded x $ \xp -> withOutRounded_ $ \yp -> f yp xp
   return y
 
-truncate_, ceiling_, floor_, round_ :: (Precision p1, Precision p2) => Rounded r p1 -> Rounded r p2
+truncate_, ceiling_, floor_, round_ :: (Precision p2) => Rounded r p1 -> Rounded r p2
 truncate_ = unary_ mpfr_trunc
 ceiling_  = unary_ mpfr_ceil
 floor_    = unary_ mpfr_floor
 round_    = unary_ (\yp xp -> mpfr_rint yp xp (fromIntegral (fromEnum TowardNearest)))
 
-tst :: (Precision p) => Test -> Rounded r p -> Bool
+tst :: Test -> Rounded r p -> Bool
 tst f x = unsafePerformIO $ in_ x $ \xfr -> do
   t <- f xfr
   return (t /= 0)
@@ -485,7 +485,7 @@ instance (Precision p, Rounding r) => ToJSON (Rounded r p) where
 instance (Precision p, Rounding r) => FromJSON (Rounded r p) where
   parseJSON = fmap toRealFloat . parseJSON
 
-instance (Precision p, Rounding r) => NFData (Rounded r p) where
+instance NFData (Rounded r p) where
   rnf Rounded{} = ()
 
 instance (Precision p, Rounding r) => Hashable (Rounded r p) where
@@ -589,12 +589,12 @@ withInOutRounded_ :: Precision p => Rounded r p -> (Ptr MPFR -> IO a) -> IO (May
 withInOutRounded_ x = fmap fst . withInOutRounded x
 
 -- | Peek an @mpfr_t@ at its actual precision, reified.
-peekRounded :: Rounding r => Ptr MPFR -> (forall (p :: *) . Precision p => Rounded r p -> IO a) -> IO a
+peekRounded :: Ptr MPFR -> (forall (p :: Type) . Precision p => Rounded r p -> IO a) -> IO a
 peekRounded ptr f = do
   MPFR{ mpfrPrec = p', mpfrSign = s', mpfrExp = e', mpfrD = d' } <- peek ptr
   asByteArray d' (precBytes p') $ \l' -> reifyPrecision (fromIntegral p') (wrap f (Rounded p' s' e' l'))
   where
-    wrap :: forall (p :: *) (r :: RoundingMode) (a :: *) . (Rounding r, Precision p) => (forall (q :: *) . Precision q => Rounded r q -> IO a) -> Rounded r p -> Proxy p -> IO a
+    wrap :: forall (p :: Type) (r :: RoundingMode) (a :: Type) . (Precision p) => (forall (q :: Type) . Precision q => Rounded r q -> IO a) -> Rounded r p -> Proxy p -> IO a
     wrap g r = \_proxy -> g r
 
 
