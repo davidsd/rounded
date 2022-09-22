@@ -79,6 +79,24 @@ module Numeric.Rounded
     , round_
     , ceiling_
     , floor_
+    -- * Special functions
+    , eint
+    , li2
+    , gamma
+    , lngamma
+    , digamma
+    , zeta
+    , erf
+    , erfc
+    , bessel_j0
+    , bessel_j1
+    , bessel_jn
+    , bessel_y0
+    , bessel_y1
+    , bessel_yn
+    , airy_ai
+    , gamma_inc
+    , beta
     -- * Foreign Function Interface
     , withInRounded
     , withInOutRounded

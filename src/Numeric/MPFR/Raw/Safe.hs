@@ -79,6 +79,26 @@ foreign import ccall safe "mpfr_log1p" mpfr_log1p :: Unary
 foreign import ccall safe "mpfr_expm1" mpfr_expm1 :: Unary
 foreign import ccall safe "mpfr_rint" mpfr_rint :: Unary
 
+-- Special functions
+foreign import ccall safe "mpfr_eint"     mpfr_eint    :: Unary
+foreign import ccall safe "mpfr_li2"      mpfr_li2     :: Unary
+foreign import ccall safe "mpfr_gamma"    mpfr_gamma   :: Unary
+foreign import ccall safe "mpfr_lngamma"  mpfr_lngamma :: Unary
+foreign import ccall safe "mpfr_digamma"  mpfr_digamma :: Unary
+foreign import ccall safe "mpfr_zeta"     mpfr_zeta    :: Unary
+foreign import ccall safe "mpfr_erf"      mpfr_erf     :: Unary
+foreign import ccall safe "mpfr_erfc"     mpfr_erfc    :: Unary
+foreign import ccall safe "mpfr_j0"       mpfr_j0      :: Unary
+foreign import ccall safe "mpfr_j1"       mpfr_j1      :: Unary
+foreign import ccall safe "mpfr_y0"       mpfr_y0      :: Unary
+foreign import ccall safe "mpfr_y1"       mpfr_y1      :: Unary
+foreign import ccall safe "mpfr_ai"       mpfr_ai      :: Unary
+
+foreign import ccall safe "mpfr_jn" mpfr_jn :: Ptr MPFR -> CLong -> Ptr MPFR -> MPFRRnd -> IO CInt
+foreign import ccall safe "mpfr_yn" mpfr_yn :: Ptr MPFR -> CLong -> Ptr MPFR -> MPFRRnd -> IO CInt
+-- TODO: mpfr_lgamma
+-- TODO: mpfr_zeta_ui
+
 type Unary' = Ptr MPFR -> Ptr MPFR -> IO CInt
 
 foreign import ccall safe "mpfr_trunc" mpfr_trunc :: Unary'
@@ -96,6 +116,10 @@ foreign import ccall safe "mpfr_max" mpfr_max :: Binary
 foreign import ccall safe "mpfr_atan2" mpfr_atan2 :: Binary
 
 foreign import ccall safe "mpfr_modf" mpfr_modf :: Binary
+
+-- Special functions
+foreign import ccall safe "mpfr_gamma_inc" mpfr_gamma_inc :: Binary
+foreign import ccall safe "mpfr_beta"      mpfr_beta      :: Binary
 
 type Comparison = Ptr MPFR -> Ptr MPFR -> IO CInt
 

@@ -35,7 +35,7 @@ import Data.Ratio ((%))
 import Data.Hashable (Hashable(..), hashUsing)
 
 import Foreign (with, alloca, allocaBytes, peek, sizeOf, nullPtr)
-import Foreign.C (CInt(..), CIntMax(..))
+import Foreign.C (CInt(..), CIntMax(..), CLong(..))
 import Foreign.C.String (peekCString)
 import Numeric.LongDouble (LongDouble)
 
@@ -209,6 +209,42 @@ atanh_ = unary mpfr_atanh
 log1p_ = unary mpfr_log1p
 expm1_ = unary mpfr_expm1
 
+-- Special functions (unary)
+
+eint, li2, gamma, lngamma, digamma, zeta, erf,
+  erfc, bessel_j0, bessel_j1, bessel_y0, bessel_y1, airy_ai
+  :: (Rounding r, Precision p)
+  => Rounded r p -> Rounded r p
+eint      = unary mpfr_eint
+li2       = unary mpfr_li2
+gamma     = unary mpfr_gamma
+lngamma   = unary mpfr_lngamma
+digamma   = unary mpfr_digamma
+zeta      = unary mpfr_zeta
+erf       = unary mpfr_erf
+erfc      = unary mpfr_erfc
+bessel_j0 = unary mpfr_j0
+bessel_j1 = unary mpfr_j1
+bessel_y0 = unary mpfr_y0
+bessel_y1 = unary mpfr_y1
+airy_ai   = unary mpfr_ai
+
+binaryLong
+  :: (Rounding r, Precision p2)
+  => (Ptr MPFR -> CLong -> Ptr MPFR -> MPFRRnd -> IO CInt)
+  -> Int
+  -> Rounded r p1
+  -> Rounded r p2
+binaryLong f n a = unsafePerformIO $ do
+  (Just c, _) <- in_ a $ \afr ->
+    out_ $ \cfr ->
+      f cfr (fromIntegral n) afr (rnd a)
+  return c
+
+bessel_jn, bessel_yn :: (Rounding r, Precision p) => Int -> Rounded r p -> Rounded r p
+bessel_jn = binaryLong mpfr_jn
+bessel_yn = binaryLong mpfr_yn
+
 binary
   :: (Rounding r, Precision p3)
   => Binary -> Rounded r p1 -> Rounded r p2 -> Rounded r p3
@@ -233,6 +269,14 @@ atan2_ = binary mpfr_atan2
 infixl 6 !+!, !-!
 infixl 7 !*!, !/!
 
+-- Special functions (binary)
+gamma_inc, beta
+  :: (Rounding r, Precision p)
+  => Rounded r p -> Rounded r p -> Rounded r p
+gamma_inc = binary mpfr_gamma_inc
+beta      = binary mpfr_beta
+
+  
 binary' :: Rounding r => Binary -> Rounded r p -> Rounded r p -> Rounded r p
 binary' f a b = unsafePerformIO $ do
   (Just c, _) <- in_ a $ \afr ->
