@@ -112,6 +112,9 @@ module Numeric.Rounded
     , sub_
     , beta_
     , gamma_inc_
+    -- ** Binary with Int argument
+    , jn_
+    , yn_
     -- ** Dual output
     , modf
     , sin_cos
@@ -133,24 +136,6 @@ module Numeric.Rounded
     , (!>!)
     , (!<!)
     , (!<>!)
-    -- * Special functions
-    , eint
-    , li2
-    , gamma
-    , lngamma
-    , digamma
-    , zeta
-    , erf
-    , erfc
-    , bessel_j0
-    , bessel_j1
-    , bessel_jn
-    , bessel_y0
-    , bessel_y1
-    , bessel_yn
-    , airy_ai
-    , gamma_inc
-    , beta
     -- * Foreign Function Interface
     , withInRounded
     , withInOutRounded

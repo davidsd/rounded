@@ -241,22 +241,6 @@ y1_ = unary mpfr_y1
 zeta_ = unary mpfr_zeta
 negate_ = neg_
 
-binaryLong
-  :: (Rounding r, Precision p2)
-  => (Ptr MPFR -> CLong -> Ptr MPFR -> MPFRRnd -> IO CInt)
-  -> Int
-  -> Rounded r p1
-  -> Rounded r p2
-binaryLong f n a = unsafePerformIO $ do
-  (Just c, _) <- in_ a $ \afr ->
-    out_ $ \cfr ->
-      f cfr (fromIntegral n) afr (rnd a)
-  return c
-
-bessel_jn, bessel_yn :: (Rounding r, Precision p) => Int -> Rounded r p -> Rounded r p
-bessel_jn = binaryLong mpfr_jn
-bessel_yn = binaryLong mpfr_yn
-
 binary
   :: (Rounding r, Precision p3)
   => Binary -> Rounded r p1 -> Rounded r p2 -> Rounded r p3
@@ -295,6 +279,22 @@ gamma_inc_ = binary mpfr_gamma_inc
 infixl 6 !+!, !-!, `add_`, `sub_`
 infixl 7 !*!, !/!, `mul_`, `div_`
 infixr 8 !**!, `pow_`
+
+binaryLong
+  :: (Rounding r, Precision p2)
+  => (Ptr MPFR -> CLong -> Ptr MPFR -> MPFRRnd -> IO CInt)
+  -> Int
+  -> Rounded r p1
+  -> Rounded r p2
+binaryLong f n a = unsafePerformIO $ do
+  (Just c, _) <- in_ a $ \afr ->
+    out_ $ \cfr ->
+      f cfr (fromIntegral n) afr (rnd a)
+  return c
+
+jn_, yn_ :: (Rounding r, Precision p1, Precision p2) => Int -> Rounded r p1 -> Rounded r p2
+jn_ = binaryLong mpfr_jn
+yn_ = binaryLong mpfr_yn
 
 binary' :: Rounding r => Binary -> Rounded r p -> Rounded r p -> Rounded r p
 binary' f a b = unsafePerformIO $ do
