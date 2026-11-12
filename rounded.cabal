@@ -115,3 +115,32 @@ test-suite rounded-test
   other-extensions:
     DataKinds
     ScopedTypeVariables
+
+test-suite rounded-ops-test
+  type: exitcode-stdio-1.0
+  main-is: Ops.hs
+  hs-source-dirs: tests
+  build-depends:
+    base,
+    rounded
+  ghc-options: -Wall -threaded -rtsopts "-with-rtsopts=-N2 -A64k"
+  default-language: Haskell2010
+  other-extensions:
+    MagicHash
+    RankNTypes
+    ScopedTypeVariables
+
+benchmark rounded-ops-bench
+  type: exitcode-stdio-1.0
+  main-is: Ops.hs
+  hs-source-dirs: bench
+  build-depends:
+    base,
+    rounded
+  ghc-options: -Wall -O2 -rtsopts
+  default-language: Haskell2010
+  other-extensions:
+    BangPatterns
+    DataKinds
+    RankNTypes
+    ScopedTypeVariables
