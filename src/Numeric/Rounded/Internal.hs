@@ -7,6 +7,7 @@
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UnboxedTuples #-}
+{-# LANGUAGE UnliftedFFITypes #-}
 {-# OPTIONS_HADDOCK not-home #-}
 -----------------------------------------------------------------------------
 -- |
@@ -39,7 +40,7 @@ import Foreign.C (CInt(..), CIntMax(..), CLong(..))
 import Foreign.C.String (peekCString)
 import Numeric.LongDouble (LongDouble)
 
-import System.IO.Unsafe (unsafePerformIO)
+import System.IO.Unsafe (unsafePerformIO, unsafeDupablePerformIO)
 
 import GHC.Prim
   ( ByteArray#
@@ -48,7 +49,11 @@ import GHC.Prim
   , newByteArray#
   , copyAddrToByteArray#
   , unsafeFreezeByteArray#
+  , MutableByteArray#
+  , RealWorld
+  , readInt32Array#
   )
+import GHC.Int (Int32(..))
 import GHC.Types (IO(..))
 import GHC.Exts (Ptr(..), Int(..))
 
@@ -169,15 +174,15 @@ unary'' f a = unsafePerformIO $ do
   return c
 
 abs' :: Rounded r p -> Rounded r p
-abs' = unary'' mpfr_abs
+abs' = fastUnary'' rounded_abs mpfr_abs
 
 negate' :: Rounded r p -> Rounded r p
-negate' = unary'' mpfr_neg
+negate' = fastUnary'' rounded_neg mpfr_neg
 
 (.-.), (.+.), (.*.) :: Rounding r => Rounded r p -> Rounded r p -> Rounded r p
-(.-.) = binary' mpfr_sub
-(.+.) = binary' mpfr_add
-(.*.) = binary' mpfr_mul
+(.-.) = fastBinary' rounded_sub mpfr_sub
+(.+.) = fastBinary' rounded_add mpfr_add
+(.*.) = fastBinary' rounded_mul mpfr_mul
 
 infixl 6 .+., .-.
 infixl 7 .*.
@@ -255,19 +260,19 @@ add_, agm_, atan2_, copysign_, dim_, div_, fmod_, hypot_, max_, min_, mul_, pow_
  (!+!), (!-!), (!*!), (!/!), (!**!)
   :: (Rounding r, Precision p1, Precision p2, Precision p3)
   => Rounded r p1 -> Rounded r p2 -> Rounded r p3
-add_ = binary mpfr_add
+add_ = fastBinary rounded_add mpfr_add
 agm_ = binary mpfr_agm
 atan2_ = binary mpfr_atan2
 copysign_ = binary mpfr_copysign
 dim_ = binary mpfr_dim
-div_ = binary mpfr_div
+div_ = fastBinary rounded_div mpfr_div
 fmod_ = binary mpfr_fmod
 hypot_ = binary mpfr_hypot
-max_ = binary mpfr_max
-min_ = binary mpfr_min
-mul_ = binary mpfr_mul
+max_ = fastBinary rounded_max mpfr_max
+min_ = fastBinary rounded_min mpfr_min
+mul_ = fastBinary rounded_mul mpfr_mul
 pow_ = binary mpfr_pow
-sub_ = binary mpfr_sub
+sub_ = fastBinary rounded_sub mpfr_sub
 beta_ = binary mpfr_beta
 gamma_inc_ = binary mpfr_gamma_inc
 (!+!) = add_
@@ -313,34 +318,187 @@ cmp' f a b = unsafePerformIO $
 cmp :: Comparison -> Rounded r p1 -> Rounded r p2 -> Bool
 cmp f a b = cmp' f a b /= 0
 
+-- Basic operations in one unsafe call
+--
+-- The operations above go through 'in_' and 'out_'': each copies its operands'
+-- limbs into pinned scratch buffers, builds @mpfr_t@ structs on the heap, makes
+-- a safe foreign call, and copies the result's limbs into a new array.  For the
+-- basic operations at the precisions people usually use (hundreds to a few
+-- thousand bits) that overhead costs several times the arithmetic itself.  So
+-- '+', '-', '*', '/', 'negate', 'abs', 'min', 'max' and their mixed-precision
+-- versions ('add_', ...), and every comparison, instead make one @unsafe@ call
+-- to @cbits/ops.c@.  It is given the operands' fields and limb arrays as they
+-- are, builds the @mpfr_t@ structs on the C stack, and has MPFR write the result
+-- straight into a fresh array.  It calls the same MPFR function with the same
+-- precisions and rounding mode as the safe path, so the result is the same, bit
+-- for bit (the test suite checks this against 'binary'', 'binary', 'unary''' and
+-- 'cmp', which are unchanged).
+--
+-- Why this is sound (GHC User's Guide, \"Foreign function interface\"):
+--
+-- * Since GHC 8.4, garbage collection never happens during an @unsafe@ call,
+--   and the call runs in the calling thread (\"Guaranteed call safety\"), so a
+--   heap object can't move while C uses it.  Passing an unpinned 'ByteArray#'
+--   to an @unsafe@ call to be read, and an unpinned 'MutableByteArray#' to be
+--   read and written, are both listed as sound (\"Unlifted FFI Types\").  The
+--   operands' arrays are only read; only the fresh result arrays are written.
+--
+-- * An @unsafe@ call must be short, must not block and must not call back into
+--   Haskell.  These MPFR functions don't block or call back, and they don't
+--   allocate on GHC's heap.  They are short at moderate precision, but a
+--   multiplication or division at 2^16 bits takes about 0.1 to 0.2 ms, and
+--   while an @unsafe@ call runs, other Haskell threads can't complete a garbage
+--   collection.  So the arithmetic takes this path only when every precision
+--   involved is at most 'fastPrecMax' bits (a division there takes about
+--   25 us), and the safe path otherwise, where its fixed cost no longer
+--   matters.  Comparisons only read limbs, in time linear in their number, and
+--   take this path at every precision.
+--
+-- * MPFR's flags and exponent range are thread-local; the call runs on the same
+--   OS thread as a safe call would, so they behave as before.
+
+-- | The largest precision, in bits, at which the basic arithmetic operations
+--   make a single @unsafe@ call.  Above it they use the safe path.
+fastPrecMax :: MPFRPrec
+fastPrecMax = 16384
+
+-- | A function from @cbits/ops.c@ for an operation with two operands.  Its
+--   arguments are the result's precision, limbs and sign (written by the
+--   call), each operand's precision, sign, exponent and limbs, and the rounding
+--   mode; it returns the result's exponent.
+type FastBinary
+  =  MPFRPrec -> MutableByteArray# RealWorld -> MutableByteArray# RealWorld
+  -> MPFRPrec -> MPFRSign -> MPFRExp -> ByteArray#
+  -> MPFRPrec -> MPFRSign -> MPFRExp -> ByteArray#
+  -> MPFRRnd -> IO MPFRExp
+
+-- | Like 'FastBinary', for an operation with one operand.
+type FastUnary
+  =  MPFRPrec -> MutableByteArray# RealWorld -> MutableByteArray# RealWorld
+  -> MPFRPrec -> MPFRSign -> MPFRExp -> ByteArray#
+  -> MPFRRnd -> IO MPFRExp
+
+-- | A comparison from @cbits/ops.c@: each operand's precision, sign, exponent
+--   and limbs.  It is pure: it only reads its arguments.
+type FastComparison
+  =  MPFRPrec -> MPFRSign -> MPFRExp -> ByteArray#
+  -> MPFRPrec -> MPFRSign -> MPFRExp -> ByteArray#
+  -> CInt
+
+foreign import ccall unsafe "rounded_add" rounded_add :: FastBinary
+foreign import ccall unsafe "rounded_sub" rounded_sub :: FastBinary
+foreign import ccall unsafe "rounded_mul" rounded_mul :: FastBinary
+foreign import ccall unsafe "rounded_div" rounded_div :: FastBinary
+foreign import ccall unsafe "rounded_min" rounded_min :: FastBinary
+foreign import ccall unsafe "rounded_max" rounded_max :: FastBinary
+
+foreign import ccall unsafe "rounded_neg" rounded_neg :: FastUnary
+foreign import ccall unsafe "rounded_abs" rounded_abs :: FastUnary
+
+foreign import ccall unsafe "rounded_cmp" rounded_cmp :: FastComparison
+foreign import ccall unsafe "rounded_equal_p" rounded_equal_p :: FastComparison
+foreign import ccall unsafe "rounded_lessgreater_p" rounded_lessgreater_p :: FastComparison
+foreign import ccall unsafe "rounded_lessequal_p" rounded_lessequal_p :: FastComparison
+foreign import ccall unsafe "rounded_less_p" rounded_less_p :: FastComparison
+foreign import ccall unsafe "rounded_greaterequal_p" rounded_greaterequal_p :: FastComparison
+foreign import ccall unsafe "rounded_greater_p" rounded_greater_p :: FastComparison
+foreign import ccall unsafe "rounded_unordered_p" rounded_unordered_p :: FastComparison
+
+-- | Allocate the limbs of a result of the given precision, and a cell for its
+--   sign (an @mpfr_sign_t@, which is a C @int@), and run the call that fills
+--   them in and returns the exponent.  The call has no effect other than
+--   writing these fresh arrays (and MPFR's flags), so it may safely be
+--   duplicated.
+withFastResult
+  :: MPFRPrec
+  -> (MutableByteArray# RealWorld -> MutableByteArray# RealWorld -> IO MPFRExp)
+  -> Rounded r p
+withFastResult p f = case precBytes p of
+  I# bytes# -> unsafeDupablePerformIO $ IO $ \s0# ->
+    case newByteArray# bytes# s0# of
+      (# s1#, d# #) -> case newByteArray# 4# s1# of
+        (# s2#, sign# #) -> case f d# sign# of
+          IO call -> case call s2# of
+            (# s3#, e #) -> case readInt32Array# sign# 0# s3# of
+              (# s4#, sg# #) -> case unsafeFreezeByteArray# d# s4# of
+                (# s5#, l# #) -> (# s5#, Rounded p (fromIntegral (I32# sg#)) e l# #)
+{-# INLINE withFastResult #-}
+
+-- | A binary operation at a given output precision, in one @unsafe@ call when
+--   every precision is at most 'fastPrecMax', and by the given safe version
+--   otherwise.
+fastBinaryAt
+  :: Rounding r
+  => FastBinary
+  -> (Rounded r p1 -> Rounded r p2 -> Rounded r p3)
+  -> MPFRPrec -> Rounded r p1 -> Rounded r p2 -> Rounded r p3
+fastBinaryAt f safe pc a@(Rounded pa sa ea da) b@(Rounded pb sb eb db)
+  | pc <= fastPrecMax && pa <= fastPrecMax && pb <= fastPrecMax =
+      withFastResult pc $ \dc sc -> f pc dc sc pa sa ea da pb sb eb db (rnd a)
+  | otherwise = safe a b
+{-# INLINE fastBinaryAt #-}
+
+-- | The fast version of 'binary': the result has the precision of its type.
+fastBinary
+  :: (Rounding r, Precision p3)
+  => FastBinary -> Binary -> Rounded r p1 -> Rounded r p2 -> Rounded r p3
+fastBinary f g a b = c where
+  c = fastBinaryAt f (binary g) (fromIntegral (precision c)) a b
+{-# INLINE fastBinary #-}
+
+-- | The fast version of 'binary'': the result has the precision of the first
+--   operand.
+fastBinary' :: Rounding r => FastBinary -> Binary -> Rounded r p -> Rounded r p -> Rounded r p
+fastBinary' f g a b = fastBinaryAt f (binary' g) (roundedPrec a) a b
+{-# INLINE fastBinary' #-}
+
+-- | The fast version of 'unary''': same precision, rounding to nearest (exact
+--   for the operations it is used for, 'negate' and 'abs').
+fastUnary'' :: FastUnary -> Unary -> Rounded r p -> Rounded r p
+fastUnary'' f g a@(Rounded pa sa ea da)
+  | pa <= fastPrecMax =
+      withFastResult pa $ \dc sc -> f pa dc sc pa sa ea da (fromIntegral (fromEnum TowardNearest))
+  | otherwise = unary'' g a
+{-# INLINE fastUnary'' #-}
+
+-- | The fast version of 'cmp''.
+fastCmp' :: FastComparison -> Rounded r p1 -> Rounded r p2 -> CInt
+fastCmp' f (Rounded pa sa ea da) (Rounded pb sb eb db) = f pa sa ea da pb sb eb db
+{-# INLINE fastCmp' #-}
+
+-- | The fast version of 'cmp'.
+fastCmp :: FastComparison -> Rounded r p1 -> Rounded r p2 -> Bool
+fastCmp f a b = fastCmp' f a b /= 0
+{-# INLINE fastCmp #-}
+
 (!==!), (!/=!), (!<=!), (!>=!), (!<!), (!>!), (!<>!)
   :: (Precision p1, Precision p2)
   => Rounded r p1 -> Rounded r p2 -> Bool
-(!==!) = cmp mpfr_equal_p
-(!/=!) = cmp mpfr_lessgreater_p
-(!<=!) = cmp mpfr_lessequal_p
-(!>=!) = cmp mpfr_greaterequal_p
-(!<!) = cmp mpfr_less_p
-(!>!) = cmp mpfr_greater_p
-(!<>!) = cmp mpfr_unordered_p
+(!==!) = fastCmp rounded_equal_p
+(!/=!) = fastCmp rounded_lessgreater_p
+(!<=!) = fastCmp rounded_lessequal_p
+(!>=!) = fastCmp rounded_greaterequal_p
+(!<!) = fastCmp rounded_less_p
+(!>!) = fastCmp rounded_greater_p
+(!<>!) = fastCmp rounded_unordered_p
 
 infix 4 !==!, !/=!, !<=!, !>=!, !<!, !>!, !<>!
 
 compare_ :: Rounded r p1 -> Rounded r p2 -> Ordering
-compare_ a b = compare (cmp' mpfr_cmp a b) 0
+compare_ a b = compare (fastCmp' rounded_cmp a b) 0
 
 instance Eq (Rounded r p) where
-  (==) = cmp mpfr_equal_p
-  (/=) = cmp mpfr_lessgreater_p
+  (==) = fastCmp rounded_equal_p
+  (/=) = fastCmp rounded_lessgreater_p
 
 instance Rounding r => Ord (Rounded r p) where
-  compare a b = compare (cmp' mpfr_cmp a b) 0
-  (<=) = cmp mpfr_lessequal_p
-  (>=) = cmp mpfr_greaterequal_p
-  (<) = cmp mpfr_less_p
-  (>) = cmp mpfr_greater_p
-  min = binary' mpfr_min
-  max = binary' mpfr_max
+  compare = compare_
+  (<=) = fastCmp rounded_lessequal_p
+  (>=) = fastCmp rounded_greaterequal_p
+  (<) = fastCmp rounded_less_p
+  (>) = fastCmp rounded_greater_p
+  min = fastBinary' rounded_min mpfr_min
+  max = fastBinary' rounded_max mpfr_max
 
 sgn :: Rounded r p -> Ordering
 sgn x = compare (unsafePerformIO $ in_ x mpfr_sgn) 0
