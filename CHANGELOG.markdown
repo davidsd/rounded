@@ -1,5 +1,17 @@
 # Revision history for rounded
 
+## next
+
+* `+`, `-`, `*`, `/`, `negate`, `abs`, `min`, `max`, `add_`, `sub_`, `mul_`,
+  `div_`, `min_`, `max_` and all comparisons each make a single unsafe
+  foreign call (`cbits/ops.c`) on the operands' limbs, instead of copying them
+  into pinned buffers for a safe call.  Results are unchanged, bit for bit.
+  At 768 to 1024 bits a multiplication takes 2.4 to 2.9 times less time, an
+  addition 5 to 6 times less, and a comparison about 15 times less.  Above
+  16384 bits the arithmetic still makes safe calls.
+* New test suite `rounded-ops-test` (the bitwise comparison) and benchmark
+  `rounded-ops-bench`.
+
 ## 1.1.1 -- 2023-10-02
 
 * Add `gmp` to `pkgconfig-depends`.  Fixes: <https://github.com/ekmett/rounded/issues/35>.
