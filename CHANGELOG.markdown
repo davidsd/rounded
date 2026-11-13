@@ -1,6 +1,6 @@
 # Revision history for rounded
 
-## next
+## 1.1.2 -- 2026-11-13
 
 * `+`, `-`, `*`, `/`, `negate`, `abs`, `min`, `max`, `add_`, `sub_`, `mul_`,
   `div_`, `min_`, `max_` and all comparisons each make a single unsafe
